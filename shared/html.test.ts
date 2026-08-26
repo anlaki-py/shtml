@@ -27,7 +27,7 @@ describe("validateHtml", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.message).toContain("800 KiB");
+      expect(result.message).toContain("5 MiB");
     }
   });
 });

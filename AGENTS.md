@@ -10,8 +10,9 @@ The browser UI and curl both use the same Convex HTTP action.
 - `src/` contains the Vite and React client.
 - `src/share-page/` owns the browser API client.
 - `shared/html.ts` is the upload contract used by the browser and backend.
-- `convex/http.ts` exposes `POST /share` and `GET /p/<id>`.
+- `convex/http.ts` exposes `POST /share` and `GET /p/<identifier>`.
 - `convex/pages.ts` owns database reads and writes.
+- `vercel.json` proxies `/api/share` and six-character public paths to Convex.
 
 Do not hand-edit `convex/_generated/`. Run `npx convex dev` or
 `npx convex codegen` after changing Convex functions.
@@ -25,7 +26,9 @@ Do not hand-edit `convex/_generated/`. Run `npx convex dev` or
 ## Rules
 
 - Keep the web API usable with raw `curl --data-binary` requests.
-- Validate byte size on both sides. Convex documents must remain below 1 MiB.
-- Shared HTML is immutable and must keep its CSP sandbox without
-  `allow-same-origin`.
+- Validate the 5 MiB byte limit in the browser and backend.
+- Store new HTML in Convex file storage. The optional inline field only supports
+  pages created by older deployments.
+- Keep six-character slugs base62 and resolve them through the `by_slug` index.
+- Shared HTML is immutable and intentionally has no CSP sandbox.
 - Public pages have no owner because the service has no authentication.

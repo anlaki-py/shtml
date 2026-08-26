@@ -9,6 +9,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
+const DEFAULT_PUBLIC_ORIGIN = "https://shtml-theta.vercel.app";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -24,6 +25,26 @@ function jsonResponse(body: unknown, status: number): Response {
       "Cache-Control": "no-store",
     },
   });
+}
+
+function getPublicUrl(requestUrl: string, slug: string): string {
+  const parsedRequestUrl = new URL(requestUrl);
+  const requestOrigin = parsedRequestUrl.origin;
+  const requestHostname = parsedRequestUrl.hostname;
+  if (requestHostname === "127.0.0.1" || requestHostname === "localhost") {
+    return new URL(`/p/${slug}`, requestOrigin).toString();
+  }
+
+  const configuredOrigin = process.env.PUBLIC_SITE_URL;
+  if (!configuredOrigin) {
+    return new URL(`/${slug}`, DEFAULT_PUBLIC_ORIGIN).toString();
+  }
+
+  const parsedOrigin = new URL(configuredOrigin);
+  if (parsedOrigin.protocol !== "https:") {
+    throw new Error("PUBLIC_SITE_URL must use HTTPS.");
+  }
+  return new URL(`/${slug}`, parsedOrigin.origin).toString();
 }
 
 http.route({
@@ -67,9 +88,18 @@ http.route({
       return jsonResponse({ error: validation.message }, status);
     }
 
-    const pageId = await ctx.runMutation(internal.pages.create, { html });
-    const url = new URL(`/p/${pageId}`, request.url).toString();
-    return jsonResponse({ id: pageId, url }, 201);
+    const storageId = await ctx.storage.store(
+      new Blob([html], { type: "text/html; charset=utf-8" }),
+    );
+
+    try {
+      const page = await ctx.runMutation(internal.pages.create, { storageId });
+      const url = getPublicUrl(request.url, page.slug);
+      return jsonResponse({ ...page, url }, 201);
+    } catch (error) {
+      await ctx.storage.delete(storageId);
+      throw error;
+    }
   }),
 });
 
@@ -78,24 +108,27 @@ http.route({
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     const path = new URL(request.url).pathname;
-    const id = path.slice("/p/".length);
-    if (!id || id.includes("/")) {
+    const identifier = path.slice("/p/".length);
+    if (!identifier || identifier.includes("/")) {
       return new Response("Page not found.", { status: 404 });
     }
 
-    const page = await ctx.runQuery(internal.pages.get, { id });
+    const page = await ctx.runQuery(internal.pages.get, { identifier });
     if (page === null) {
       return new Response("Page not found.", { status: 404 });
     }
 
-    return new Response(page.html, {
+    const body =
+      page.kind === "inline" ? page.html : await ctx.storage.get(page.storageId);
+    if (body === null) {
+      return new Response("Page not found.", { status: 404 });
+    }
+
+    return new Response(body, {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "public, max-age=31536000, immutable",
-        "Content-Security-Policy":
-          "sandbox allow-downloads allow-forms allow-modals allow-popups allow-scripts allow-top-navigation-by-user-activation",
-        "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff",
       },
     });

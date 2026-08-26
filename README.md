@@ -1,15 +1,38 @@
 # shtml
 
-Paste HTML or choose a file. `shtml` stores it in Convex and returns a public
-link. There is no account system.
+Share an HTML document without an account. Paste, choose, or drop a file and
+`shtml` returns a short public link on its own domain.
 
-Shared pages run as HTML, including inline scripts. A Content Security Policy
-gives each page an opaque origin, so it cannot use cookies or local storage from
-the Convex deployment. Uploads are immutable and limited to 800 KiB.
+Uploads are immutable, limited to 5 MiB, and stored in Convex file storage.
+Shared pages are served as ordinary HTML, including scripts, without a CSP
+sandbox.
 
-## Run it locally
+## Use curl
 
-You need Node.js 22 or newer and a Convex account.
+```sh
+curl --data-binary @page.html \
+  -H 'Content-Type: text/html' \
+  https://shtml-theta.vercel.app/api/share
+```
+
+The response looks like this:
+
+```json
+{
+  "id": "...",
+  "slug": "aB3x9Q",
+  "url": "https://shtml-theta.vercel.app/aB3x9Q"
+}
+```
+
+Invalid or oversized input returns JSON with an `error` string and a `4xx`
+status. Machine-readable usage instructions are also published at
+[`/llms.txt`](https://shtml-theta.vercel.app/llms.txt) and
+[`/openapi.json`](https://shtml-theta.vercel.app/openapi.json).
+
+## Run locally
+
+You need Node.js 24 and a Convex account.
 
 ```sh
 npm install
@@ -22,49 +45,28 @@ Keep Convex running. In another terminal:
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Convex command writes the deployment URLs to
-`.env.local`. Older CLI versions may only write `VITE_CONVEX_URL`; the client can
-derive the matching `.convex.site` HTTP URL from it.
-
-## Use curl
-
-Replace the deployment name with the value from the Convex dashboard under
-Settings, URL and Deploy Key.
-
-```sh
-curl --data-binary @page.html \
-  -H 'Content-Type: text/html' \
-  https://your-deployment.convex.site/share
-```
-
-The response looks like this:
-
-```json
-{
-  "id": "...",
-  "url": "https://your-deployment.convex.site/p/..."
-}
-```
-
-Invalid or oversized input returns JSON with an `error` string and a `4xx`
-status.
+Open `http://localhost:5173`. Convex writes deployment URLs to `.env.local`.
+The local browser calls the Convex HTTP action directly. Local responses use a
+working `/p/<slug>` Convex URL because the short root-path rewrite only exists
+on Vercel.
 
 ## Deploy to Vercel
 
-The checked-in `vercel.json` uses this build command:
+The checked-in `vercel.json` deploys Convex and then builds the Vite app:
 
 ```sh
 npx convex deploy --cmd 'npm run build'
 ```
 
-Create a production deploy key in the Convex dashboard. Give it the
-`deployment:deploy` permission, then add it to Vercel as `CONVEX_DEPLOY_KEY` for
-the Production environment. Add a Convex preview deploy key to Vercel's Preview
-environment if you want preview deployments.
+Create a production deploy key in the Convex dashboard and add it to Vercel as
+`CONVEX_DEPLOY_KEY` for the Production environment. Use a preview deploy key for
+Vercel Preview deployments if needed.
 
-Vercel hosts the Vite app. Convex hosts the public `/share` and `/p/<id>` routes.
-The links therefore use the deployment's `.convex.site` domain. Convex custom
-domains also work by setting `VITE_CONVEX_SITE_URL` to that HTTPS origin.
+Vercel proxies `POST /api/share` to Convex and rewrites six-character root paths
+to Convex's page route. The production Convex site URL is therefore checked into
+`vercel.json`; update it if the Convex production deployment changes. To use a
+different canonical service domain, set `PUBLIC_SITE_URL` in the Convex
+deployment environment and update the public metadata files.
 
 ## Checks
 
@@ -72,13 +74,17 @@ domains also work by setting `VITE_CONVEX_SITE_URL` to that HTTPS origin.
 npm run check
 ```
 
-This runs ESLint, the unit tests, TypeScript, and the Vite production build.
+This runs ESLint, the unit tests, TypeScript, and the production build.
 
-## Abuse and deletion
+## Security and deletion
 
 The upload route is intentionally public. The size cap limits each request, but
-it does not stop someone from sending many requests. Watch Convex usage and add
-rate limiting before posting the endpoint somewhere busy.
+does not stop repeated uploads. Monitor Convex usage and add rate limiting before
+promoting the endpoint widely.
+
+Shared HTML has no browser sandbox and runs on the service origin. Treat every
+shared page as untrusted. Do not add authentication, secrets, or sensitive
+origin-scoped data to this domain without restoring strong isolation.
 
 There is no delete API because anonymous deletion needs a separate secret token.
-For now, remove pages from the Convex dashboard.
+For now, remove pages and their stored files from the Convex dashboard.

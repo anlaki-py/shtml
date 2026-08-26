@@ -6,7 +6,8 @@ import {
   getHtmlByteLength,
   validateHtml,
 } from "../shared/html";
-import { buildCurlCommand, resolveConvexSiteUrl, shareHtml } from "./share-page/api";
+import { buildCurlCommand, resolveShareEndpoint, shareHtml } from "./share-page/api";
+import { isHtmlFile } from "./share-page/html-file";
 
 type ShareState =
   | { kind: "idle" }
@@ -17,6 +18,9 @@ type ShareState =
 function formatBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
+  }
+  if (bytes >= 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
   }
   return `${(bytes / 1024).toFixed(1)} KiB`;
 }
@@ -32,13 +36,20 @@ function App() {
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [shareState, setShareState] = useState<ShareState>({ kind: "idle" });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
   const byteLength = useMemo(() => getHtmlByteLength(html), [html]);
 
   const configuration = useMemo(() => {
     try {
-      return { siteUrl: resolveConvexSiteUrl(import.meta.env), error: null };
+      return {
+        shareEndpoint: resolveShareEndpoint(
+          import.meta.env,
+          window.location.origin,
+        ),
+        error: null,
+      };
     } catch (error) {
-      return { siteUrl: null, error: getErrorMessage(error) };
+      return { shareEndpoint: null, error: getErrorMessage(error) };
     }
   }, []);
 
@@ -50,6 +61,10 @@ function App() {
   }
 
   async function loadFile(file: File) {
+    if (!isHtmlFile(file)) {
+      setShareState({ kind: "error", message: "Drop an .html or .htm file." });
+      return;
+    }
     if (file.size > MAX_HTML_BYTES) {
       setShareState({
         kind: "error",
@@ -65,6 +80,28 @@ function App() {
     }
   }
 
+  function handleDragEnter(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    if (!event.dataTransfer.types.includes("Files")) {
+      return;
+    }
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDragging(false);
+    }
+  }
+
+  function handleDragOver(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (file) {
@@ -75,7 +112,12 @@ function App() {
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
+    dragDepthRef.current = 0;
     setIsDragging(false);
+    if (event.dataTransfer.files.length > 1) {
+      setShareState({ kind: "error", message: "Drop one HTML file at a time." });
+      return;
+    }
     const file = event.dataTransfer.files[0];
     if (file) {
       void loadFile(file);
@@ -89,7 +131,7 @@ function App() {
       setShareState({ kind: "error", message: validation.message });
       return;
     }
-    if (!configuration.siteUrl) {
+    if (!configuration.shareEndpoint) {
       setShareState({
         kind: "error",
         message: configuration.error ?? "Convex is not configured.",
@@ -99,7 +141,7 @@ function App() {
 
     setShareState({ kind: "sharing" });
     try {
-      const page = await shareHtml(configuration.siteUrl, html);
+      const page = await shareHtml(configuration.shareEndpoint, html);
       setCopyMessage(null);
       setShareState({ kind: "shared", url: page.url });
     } catch (error) {
@@ -132,17 +174,22 @@ function App() {
       <section className="workspace" aria-labelledby="page-title">
         <div className="intro">
           <h1 id="page-title">Paste HTML. Get a link.</h1>
-          <p>No account. Files stay up until you remove them from Convex.</p>
+          <p>No account. Links are six characters and use this domain.</p>
         </div>
 
         <form onSubmit={handleShare}>
           <div
             className={`editor ${isDragging ? "editor--dragging" : ""}`}
-            onDragEnter={() => setIsDragging(true)}
-            onDragLeave={() => setIsDragging(false)}
-            onDragOver={(event) => event.preventDefault()}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
             onDrop={handleDrop}
           >
+            {isDragging && (
+              <div className="drop-overlay" aria-hidden="true">
+                Drop HTML file
+              </div>
+            )}
             <div className="editor__bar">
               <label htmlFor="html-input">HTML</label>
               <div className="editor__actions">
@@ -239,19 +286,18 @@ function App() {
         <aside className="curl" aria-labelledby="curl-title">
           <div>
             <h2 id="curl-title">curl</h2>
-            <p>The response is JSON with the page ID and URL.</p>
+            <p>The response is JSON with the page ID, slug, and URL.</p>
           </div>
           <code>
-            {configuration.siteUrl
-              ? buildCurlCommand(configuration.siteUrl)
+            {configuration.shareEndpoint
+              ? buildCurlCommand(configuration.shareEndpoint)
               : "Run `npx convex dev` to get the endpoint."}
           </code>
         </aside>
       </section>
 
       <footer>
-        Shared pages run in a sandbox. Scripts work, but they cannot use this site’s
-        cookies or storage.
+        Pages are public, immutable, and run without a browser sandbox.
       </footer>
     </main>
   );

@@ -1,0 +1,13 @@
+# shtml
+
+shtml is a public, anonymous HTML sharing service at https://shtml-theta.vercel.app/.
+
+Upload raw HTML with POST /api/share. The body must be non-empty UTF-8 HTML no larger than 5 MiB. Send Content-Type: text/html. The JSON response contains id, slug, and url. The url is a six-character path on the shtml domain.
+
+Example:
+
+curl --data-binary @page.html -H 'Content-Type: text/html' https://shtml-theta.vercel.app/api/share
+
+Opening /<slug> returns the uploaded HTML unchanged. Scripts are allowed. Pages are public and immutable. No authentication is required.
+
+OpenAPI description: https://shtml-theta.vercel.app/openapi.json

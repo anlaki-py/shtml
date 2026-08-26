@@ -1,0 +1,119 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "shtml",
+    "version": "1.0.0",
+    "description": "Public, anonymous HTML sharing. Upload raw HTML and receive a short immutable URL."
+  },
+  "servers": [
+    {
+      "url": "https://shtml-theta.vercel.app"
+    }
+  ],
+  "paths": {
+    "/api/share": {
+      "post": {
+        "summary": "Share an HTML document",
+        "description": "Accepts a non-empty UTF-8 HTML body up to 5 MiB. No authentication is required.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/html": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The page was stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/{slug}": {
+      "get": {
+        "summary": "Open a shared HTML document",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9A-Za-z]{6}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The original HTML document.",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The page does not exist."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "SharedPage": {
+        "type": "object",
+        "required": ["id", "slug", "url"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^[0-9A-Za-z]{6}$"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "The request was invalid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

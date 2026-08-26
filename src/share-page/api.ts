@@ -1,5 +1,8 @@
+import { isSlug } from "../../shared/slug";
+
 export interface SharedPage {
   id: string;
+  slug: string;
   url: string;
 }
 
@@ -18,18 +21,22 @@ function trimTrailingSlash(value: string): string {
 
 function assertHttpUrl(value: string): string {
   const parsedUrl = new URL(value);
-  const isLoopback =
-    parsedUrl.hostname === "localhost" ||
-    parsedUrl.hostname === "127.0.0.1" ||
-    parsedUrl.hostname === "[::1]";
   const isAllowedProtocol =
     parsedUrl.protocol === "https:" ||
-    (parsedUrl.protocol === "http:" && isLoopback);
+    (parsedUrl.protocol === "http:" && isLoopbackHostname(parsedUrl.hostname));
 
   if (!isAllowedProtocol) {
     throw new Error("The Convex URL must use HTTPS.");
   }
   return parsedUrl.origin;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "[::1]"
+  );
 }
 
 export function resolveConvexSiteUrl(env: ConvexEnvironment): string {
@@ -49,17 +56,33 @@ export function resolveConvexSiteUrl(env: ConvexEnvironment): string {
   );
 }
 
+export function resolveShareEndpoint(
+  env: ConvexEnvironment,
+  pageOrigin: string,
+): string {
+  const parsedOrigin = new URL(assertHttpUrl(pageOrigin));
+  if (!isLoopbackHostname(parsedOrigin.hostname)) {
+    return `${parsedOrigin.origin}/api/share`;
+  }
+  return `${resolveConvexSiteUrl(env)}/share`;
+}
+
 function parseSharedPage(value: unknown): SharedPage | null {
   if (typeof value !== "object" || value === null) {
     return null;
   }
 
   const candidate = value as Partial<SharedPage>;
-  if (typeof candidate.id !== "string" || typeof candidate.url !== "string") {
+  if (
+    typeof candidate.id !== "string" ||
+    typeof candidate.slug !== "string" ||
+    !isSlug(candidate.slug) ||
+    typeof candidate.url !== "string"
+  ) {
     return null;
   }
 
-  return { id: candidate.id, url: candidate.url };
+  return { id: candidate.id, slug: candidate.slug, url: candidate.url };
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -76,11 +99,11 @@ async function readJson(response: Response): Promise<unknown> {
 }
 
 export async function shareHtml(
-  siteUrl: string,
+  endpoint: string,
   html: string,
   request: typeof fetch = fetch,
 ): Promise<SharedPage> {
-  const response = await request(`${siteUrl}/share`, {
+  const response = await request(endpoint, {
     method: "POST",
     headers: { "Content-Type": "text/html; charset=utf-8" },
     body: html,
@@ -104,6 +127,6 @@ export async function shareHtml(
   return sharedPage;
 }
 
-export function buildCurlCommand(siteUrl: string): string {
-  return `curl --data-binary @page.html -H 'Content-Type: text/html' ${siteUrl}/share`;
+export function buildCurlCommand(endpoint: string): string {
+  return `curl --data-binary @page.html -H 'Content-Type: text/html' ${endpoint}`;
 }
