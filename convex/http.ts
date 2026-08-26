@@ -9,7 +9,7 @@ import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
-const DEFAULT_PUBLIC_ORIGIN = "https://shtml-theta.vercel.app";
+const DEFAULT_PUBLIC_ORIGIN = "https://shtml-anlaki.vercel.app";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

@@ -12,7 +12,7 @@ sandbox.
 ```sh
 curl --data-binary @page.html \
   -H 'Content-Type: text/html' \
-  https://shtml-theta.vercel.app/api/share
+  https://shtml-anlaki.vercel.app/api/share
 ```
 
 The response looks like this:
@@ -21,14 +21,14 @@ The response looks like this:
 {
   "id": "...",
   "slug": "aB3x9Q",
-  "url": "https://shtml-theta.vercel.app/aB3x9Q"
+  "url": "https://shtml-anlaki.vercel.app/aB3x9Q"
 }
 ```
 
 Invalid or oversized input returns JSON with an `error` string and a `4xx`
 status. Machine-readable usage instructions are also published at
-[`/llms.txt`](https://shtml-theta.vercel.app/llms.txt) and
-[`/openapi.json`](https://shtml-theta.vercel.app/openapi.json).
+[`/llms.txt`](https://shtml-anlaki.vercel.app/llms.txt) and
+[`/openapi.json`](https://shtml-anlaki.vercel.app/openapi.json).
 
 ## Run locally
 
